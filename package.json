@@ -1,0 +1,21 @@
+{
+  "name": "jsonhash",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "tape test/**/*.test.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "goph": "^1.0.0",
+    "hyperbolic-lru": "1.0.0"
+  },
+  "devDependencies": {
+    "nanobench": "^3.0.0",
+    "tape": "^5.7.5"
+  }
+}
