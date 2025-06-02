@@ -64,6 +64,24 @@ hasher.clearNodeStringCache();
 // const directSim = estimateJaccardSimilarity(sketch1, sketch2);
 ```
 
+## Algorithm Overview: Embedding JSON for Tree Similarity
+
+JSON-Hashify transforms a JSON object into a compact numerical sketch, enabling fast and effective structural similarity comparisons. Here's a high-level overview of the process:
+
+1.  **Tree Conversion & CSR Representation**: The input JSON is first parsed into an internal tree structure. Each key-value pair and array element becomes a node in this tree. To navigate this tree efficiently, it's converted into a [Compressed Sparse Row (CSR)](https://en.wikipedia.org/wiki/Sparse_matrix#Compressed_sparse_row_(CSR,_CRS_or_Yale_format)) format. CSR is typically used for sparse matrices but is adapted here to represent the tree's adjacency list (parent-child relationships), allowing for quick traversal of nodes and their children.
+
+2.  **Subtree Feature Extraction**: For each node in the JSON tree, the algorithm extracts a "subtree" of a specified depth (`options.subtreeDepth`). This means it considers the node itself and its descendants down to that depth. This captures localized structural information around each node.
+
+3.  **Node String Generation & Shingling**: Each node within these extracted subtrees is then represented as a canonical string. This string typically combines the path from the root of the JSON to the node (e.g., `"$root.level1.item[0].name"`) and its value (if it's a leaf node, e.g., `"$root.name:Alice"`). If `preserveArrayOrder` is false, array indices are omitted from the path to treat arrays as bags of elements. These canonical node strings are then broken down into smaller, overlapping k-character pieces called "k-shingles" (where k is `options.shingleSize`). Each shingle is hashed to a numerical representation. This is the knob to turn for weighing the similarity of the content of the objects.
+
+4.  **Frequency Thresholding**: The collection of all hashed shingles from all subtrees forms a multiset (shingles can appear multiple times). Shingles that appear fewer times than `options.frequencyThreshold` are discarded. This step helps to filter out overly rare or noisy features, focusing the signature on more prevalent structural and content patterns.
+
+5.  **Grouped-OPH Sketching**: The resulting set of unique, thresholded shingle hashes is then processed by the Grouped One Permutation Hashing (Grouped-OPH) algorithm. [GOPH](https://www.npmjs.com/package/grouped-oph) is a variation of MinHash designed for efficiency and accuracy. It applies multiple hash functions (controlled by `options.numHashFunctions` and `options.numGroups`) to the shingle set to produce a fixed-size numerical array – the "sketch" or "signature" of the JSON.
+
+6.  **Similarity Estimation**: To compare two JSON objects, their sketches are compared using the Jaccard index. The Jaccard index of the sketches provides a highly efficient and accurate estimate of the Jaccard similarity between the original sets of shingled features. This final similarity score (from 0.0 to 1.0) reflects how structurally and semantically similar the two JSON objects are, based on the extracted and hashed features.
+
+The `enableNodeStringCache` option can further optimize this by caching the shingle sets generated for identical node strings (`path:value` combinations), speeding up processing if many identical sub-structures appear across multiple JSONs or within the same JSON.
+
 ## API
 
 ### `new JSONHashify(options?)`
@@ -139,13 +157,6 @@ Benchmarks are run with `node bench/random-json.js`.
 | JSON (Depth 5, Max Children 3)  | Stateful  | 3353.01                | ~298 μs           |
 
 **Note on Sketch Generation Cache:** The `enableNodeStringCache` option is beneficial when processing the exact same JSON multiple times or when JSON objects share many identical sub-structures (leading to identical `path:value` strings for nodes). For highly diverse JSON inputs without repeated sub-structures, the overhead of cache management might slightly reduce performance compared to stateless generation.
-
-### Underlying Improvements
-
-`JSONHashify` relies on the `grouped-oph` library for its core signature generation (Grouped One Permutation Hashing) and Jaccard similarity estimation. This provides a robust and mathematically sound basis for the sketches.
-
-*   **Efficient Hashing:** `grouped-oph` employs efficient hashing mechanisms (like MurmurHash3) for processing shingle data.
-*   **Optimized Sketching:** The GOPH technique itself is designed to produce compact and effective sketches for Jaccard similarity estimation.
 
 
 ## Why?
