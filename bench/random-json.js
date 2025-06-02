@@ -1,4 +1,4 @@
-import { JSONHash } from '../index.js';
+import { JSONHashify, generateJSONHashifySketch, compareJSONHashifySketches, estimateJaccardSimilarity } from '../index.js';
 import nanobench from 'nanobench';
 
 // Helper to generate somewhat random JSON structures
@@ -42,7 +42,40 @@ const configurations = [
 ];
 
 // Create a hasher instance specifically for stateful tests
-const statefulHasher = new JSONHash({ ...HASHER_OPTIONS, enableNodeStringCache: true });
+const statefulHasher = new JSONHashify({ ...HASHER_OPTIONS, enableNodeStringCache: true });
+const defaultHasher = new JSONHashify(HASHER_OPTIONS); // For generating reference sketches & general use
+
+// --- Reference JSON Objects and Sketches for Comparison Benchmarks ---
+const jsonA = {
+    name: "Alice",
+    age: 30,
+    city: "New York",
+    hobbies: ["reading", "hiking", "coding"],
+    occupation: "Engineer"
+};
+
+const jsonB_high_similarity = {
+    name: "Alice",
+    age: 31, // Slight change
+    city: "New York",
+    hobbies: ["reading", "hiking", "coding", "swimming"], // Added one
+    occupation: "Engineer",
+    status: "active" // Added one field
+};
+
+const jsonC_low_similarity = {
+    vehicle: "Car",
+    model: "Tesla Model S",
+    year: 2023,
+    features: ["autopilot", "electric", "long range"],
+    color: "Red"
+};
+
+const sketchA = defaultHasher.generateSketch(jsonA);
+const sketchB_high = defaultHasher.generateSketch(jsonB_high_similarity);
+const sketchC_low = defaultHasher.generateSketch(jsonC_low_similarity);
+
+const COMPARISON_ITERATIONS = 5000; // Fewer iterations for comparison tests
 
 // Run benchmarks for each configuration
 configurations.forEach(config => {
@@ -58,7 +91,7 @@ configurations.forEach(config => {
         bench.start();
         for (var i = 0; i < ITERATIONS_PER_CASE; i++) {
             // Create a new hasher for each sketch to ensure no state carry-over
-            const statelessHasher = new JSONHash(HASHER_OPTIONS); 
+            const statelessHasher = new JSONHashify(HASHER_OPTIONS); 
             statelessHasher.generateSketch(testData[i]);
         }
         // bench.log('Average time (Stateless): ' + (bench.elapsed() / ITERATIONS_PER_CASE).toFixed(4) + 'ms');
@@ -84,4 +117,76 @@ configurations.forEach(config => {
         bench.log('QPS (Stateful Cache Hits): ' + (ITERATIONS_PER_CASE / (bench.elapsed() / 1000)).toFixed(2));
         bench.end();
     });
+}); 
+
+// --- Jaccard Similarity Comparison Benchmarks ---
+nanobench('Compare Sketches: A vs B (High Sim) - Exact', (bench) => {
+    bench.start();
+    let sim = 0;
+    for (let i = 0; i < COMPARISON_ITERATIONS; i++) {
+        sim = defaultHasher.compareSketches(sketchA, sketchB_high);
+    }
+    bench.log(`Similarity: ${sim.toFixed(4)}`);
+    bench.log(`QPS: ${(COMPARISON_ITERATIONS / (bench.elapsed() / 1000)).toFixed(2)}`);
+    bench.end();
+});
+
+nanobench('Compare Sketches: A vs B (High Sim) - Approx (Th: 0.8, Tol: 0.01)', (bench) => {
+    const estimationOptions = { similarityThreshold: 0.8, errorTolerance: 0.01 };
+    bench.start();
+    let sim = 0;
+    for (let i = 0; i < COMPARISON_ITERATIONS; i++) {
+        sim = defaultHasher.compareSketches(sketchA, sketchB_high, estimationOptions);
+    }
+    bench.log(`Similarity: ${sim.toFixed(4)} (Approximation)`);
+    bench.log(`QPS: ${(COMPARISON_ITERATIONS / (bench.elapsed() / 1000)).toFixed(2)}`);
+    bench.end();
+});
+
+nanobench('Compare Sketches: A vs C (Low Sim) - Exact', (bench) => {
+    bench.start();
+    let sim = 0;
+    for (let i = 0; i < COMPARISON_ITERATIONS; i++) {
+        sim = defaultHasher.compareSketches(sketchA, sketchC_low);
+    }
+    bench.log(`Similarity: ${sim.toFixed(4)}`);
+    bench.log(`QPS: ${(COMPARISON_ITERATIONS / (bench.elapsed() / 1000)).toFixed(2)}`);
+    bench.end();
+});
+
+nanobench('Compare Sketches: A vs C (Low Sim) - Approx (Th: 0.8, Tol: 0.01)', (bench) => {
+    const estimationOptions = { similarityThreshold: 0.8, errorTolerance: 0.01 }; // Expect early exit to 0.0
+    bench.start();
+    let sim = 0;
+    for (let i = 0; i < COMPARISON_ITERATIONS; i++) {
+        sim = defaultHasher.compareSketches(sketchA, sketchC_low, estimationOptions);
+    }
+    bench.log(`Similarity: ${sim.toFixed(4)} (Approximation)`);
+    bench.log(`QPS: ${(COMPARISON_ITERATIONS / (bench.elapsed() / 1000)).toFixed(2)}`);
+    bench.end();
+});
+
+nanobench('Compare Sketches: A vs C (Low Sim) - Approx (Th: 0.1, Tol: 0.01)', (bench) => {
+    const estimationOptions = { similarityThreshold: 0.1, errorTolerance: 0.01 }; // Threshold is low
+    bench.start();
+    let sim = 0;
+    for (let i = 0; i < COMPARISON_ITERATIONS; i++) {
+        sim = defaultHasher.compareSketches(sketchA, sketchC_low, estimationOptions);
+    }
+    bench.log(`Similarity: ${sim.toFixed(4)} (Approximation)`);
+    bench.log(`QPS: ${(COMPARISON_ITERATIONS / (bench.elapsed() / 1000)).toFixed(2)}`);
+    bench.end();
+});
+
+// Example using the compareJsonHashes utility function (less iterations for brevity)
+nanobench('compareJSONHashifySketches Utility: A vs B (High Sim) - Approx (Th: 0.8, Tol: 0.01)', (bench) => {
+    const estimationOptions = { similarityThreshold: 0.8, errorTolerance: 0.01 };
+    bench.start();
+    let sim = 0;
+    for (let i = 0; i < 1000; i++) { // Fewer iterations for this example
+        sim = compareJSONHashifySketches(sketchA, sketchB_high, HASHER_OPTIONS, estimationOptions);
+    }
+    bench.log(`Similarity: ${sim.toFixed(4)} (Approximation via utility)`);
+    bench.log(`QPS: ${(1000 / (bench.elapsed() / 1000)).toFixed(2)}`);
+    bench.end();
 }); 

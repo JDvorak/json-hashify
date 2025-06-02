@@ -1,17 +1,24 @@
 {
-  "name": "jsonhash",
+  "name": "json-hashify",
   "version": "1.0.0",
-  "description": "",
+  "description": "JSON-Hashify is a library for hashing JSON objects and arrays into compact signatures (sketches) that can be used to compare the similarity of JSON objects.",
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "tape test/**/*.test.js"
+    "test": "tape test/*.test.js",
+    "bench": "node bench/random-json.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "json",
+    "hash",
+    "sketch",
+    "similarity",
+    "jaccard"
+  ],
+  "author": "John Dvorak <john@johnsdvorak.com>",
+  "license": "MIT",
   "dependencies": {
-    "goph": "^1.0.0",
+    "grouped-oph": "^1.0.0",
     "hyperbolic-lru": "1.0.0"
   },
   "devDependencies": {

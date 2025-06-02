@@ -1,4 +1,4 @@
-import { generateGroupedOPHSignature, estimateJaccardSimilarity, murmurhash3_32_gc_single_int } from 'goph';
+import { generateGroupedOPHSignature, estimateJaccardSimilarity, murmurhash3_32_gc_single_int } from 'grouped-oph';
 import { HyperbolicLRUCache } from 'hyperbolic-lru';
 
 // Define rolling hash constants at a higher scope or make them configurable
@@ -12,9 +12,9 @@ const ROLLING_PRIME_MODULUS = 1000000007;
  * derived from the path:value representation of nodes within the extracted subtrees
  * (filtered by frequency threshold).
  */
-class JSONHash {
+class JSONHashify {
     /**
-     * Initializes JSONHash with optional configuration.
+     * Initializes JSONHashify with optional configuration.
      * @param {object} [options={}] Configuration options.
      * @param {number} [options.subtreeDepth=2] The depth of subtrees to consider for shingling.
      * @param {number} [options.frequencyThreshold=1] The minimum frequency for a shingle to be included in the final sketch.
@@ -25,7 +25,7 @@ class JSONHash {
      * @param {Array<string>} [options.ignoreKeys=[]] Keys to ignore during tree traversal and hashing (e.g., ['position']).
      * @param {number} [options.stringToHashifyThreshold=128] String length above which to use JsonRollingHasher for the value.
      * @param {number} [options.arrayToHashifyThreshold=10] Array length above which to use JsonRollingHasher for the value.
-     * @param {boolean} [options.enableNodeStringCache=false] Whether to cache shingle sets for identical node strings (path:value) across calls within the same JSONHash instance.
+     * @param {boolean} [options.enableNodeStringCache=false] Whether to cache shingle sets for identical node strings (path:value) across calls within the same JSONHashify instance.
      * @param {number} [options.nodeStringCacheSize=1000] Max number of items in the node string shingle cache if enabled.
      */
     constructor(options = {}) {
@@ -397,10 +397,28 @@ class JSONHash {
      * Compares two MinHash sketches and estimates Jaccard similarity.
      * @param {Array<number>} sketch1 First MinHash sketch.
      * @param {Array<number>} sketch2 Second MinHash sketch.
+     * @param {object} [estimationOptions={}] Options for Jaccard similarity estimation.
+     * @param {number} [estimationOptions.similarityThreshold] The Jaccard similarity threshold (0 to 1) for early termination.
+     *                                                       If the algorithm can confidently determine that the true similarity is
+     *                                                       above or below this threshold with an error probability less than
+     *                                                       `estimationOptions.errorTolerance`, it may return an approximate result early.
+     * @param {number} [estimationOptions.errorTolerance] The acceptable probability (0 to 1, e.g., 0.01 for 1%)
+     *                                                    of making an incorrect early termination decision.
      * @returns {number} Estimated Jaccard similarity (0 to 1).
+     *                   If `similarityThreshold` and `errorTolerance` are provided,
+     *                   the function may return `1.0` if it determines the sets are likely similar enough
+     *                   or `0.0` if likely dissimilar enough, without computing the exact Jaccard index.
      */
-    compareSketches(sketch1, sketch2) {
-        return estimateJaccardSimilarity(sketch1, sketch2);
+    compareSketches(sketch1, sketch2, estimationOptions = {}) {
+        const { similarityThreshold, errorTolerance, ...otherOptions } = estimationOptions;
+        let finalEstimationOptions = { ...otherOptions }; // Pass through any other options
+
+        if (similarityThreshold !== undefined && errorTolerance !== undefined) {
+            finalEstimationOptions.similarityThreshold = similarityThreshold;
+            finalEstimationOptions.errorTolerance = errorTolerance;
+            finalEstimationOptions.numGroups = this.numGroups; // Add numGroups from the instance
+        }
+        return estimateJaccardSimilarity(sketch1, sketch2, finalEstimationOptions);
     }
 
     /**
@@ -440,32 +458,33 @@ class JSONHash {
 }
 
 /**
- * Utility function to create a JSONHash instance and generate a sketch.
+ * Utility function to create a JSONHashify instance and generate a sketch.
  * @param {object|Array} json Input JSON.
- * @param {object} [options] Options for JSONHash constructor.
+ * @param {object} [options] Options for JSONHashify constructor.
  * @returns {Array<number>} The MinHash sketch.
  */
-function jsonHash(json, options) {
-    const hasher = new JSONHash(options);
+function generateJSONHashifySketch(json, options) {
+    const hasher = new JSONHashify(options);
     return hasher.generateSketch(json);
 }
 
 /**
- * Utility function to create a JSONHash instance and compare sketches.
+ * Utility function to create a JSONHashify instance and compare sketches.
  * @param {Array<number>} sketch1 First sketch.
  * @param {Array<number>} sketch2 Second sketch.
- * @param {object} [options] Options for JSONHash constructor (can be empty if defaults are okay).
+ * @param {object} [constructorOptions={}] Options for JSONHashify constructor.
+ * @param {object} [estimationOptions={}] Options for Jaccard similarity estimation (see `JSONHashify.prototype.compareSketches`).
  * @returns {number} Estimated Jaccard similarity.
  */
-function compareJsonHashes(sketch1, sketch2, options) {
-    const comparer = new JSONHash(options); 
-    return comparer.compareSketches(sketch1, sketch2);
+function compareJSONHashifySketches(sketch1, sketch2, constructorOptions = {}, estimationOptions = {}) {
+    const comparer = new JSONHashify(constructorOptions);
+    return comparer.compareSketches(sketch1, sketch2, estimationOptions);
 }
 
 
 export {
-    JSONHash,
-    jsonHash,
-    compareJsonHashes,
+    JSONHashify,
+    generateJSONHashifySketch,
+    compareJSONHashifySketches,
     estimateJaccardSimilarity
 };

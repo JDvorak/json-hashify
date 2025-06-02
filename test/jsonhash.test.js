@@ -1,12 +1,12 @@
 import test from 'tape';
-import { JSONHash } from '../index.js';
+import { JSONHashify } from '../index.js';
 
 // --- Basic Initialization Tests ---
-test('JSONHash - Initialization', (t) => {
+test('JSONHashify - Initialization', (t) => {
     t.plan(6);
 
-    const hasher = new JSONHash();
-    t.ok(hasher instanceof JSONHash, 'Should create an instance of JSONHash');
+    const hasher = new JSONHashify();
+    t.ok(hasher instanceof JSONHashify, 'Should create an instance of JSONHashify');
     t.equal(hasher.options.subtreeDepth, 2, 'Default subtreeDepth should be 2');
     t.equal(hasher.options.frequencyThreshold, 1, 'Default frequencyThreshold should be 1');
     t.equal(hasher.options.numHashFunctions, 128, 'Default numHashFunctions should be 128');
@@ -14,7 +14,7 @@ test('JSONHash - Initialization', (t) => {
     t.equal(hasher.options.shingleSize, 5, 'Default shingleSize should be 5');
 });
 
-test('JSONHash - Custom Options Initialization', (t) => {
+test('JSONHashify - Custom Options Initialization', (t) => {
     t.plan(5);
     const options = {
         subtreeDepth: 3,
@@ -23,7 +23,7 @@ test('JSONHash - Custom Options Initialization', (t) => {
         preserveArrayOrder: false,
         shingleSize: 3,
     };
-    const hasher = new JSONHash(options);
+    const hasher = new JSONHashify(options);
     t.equal(hasher.options.subtreeDepth, 3, 'Custom subtreeDepth should be set');
     t.equal(hasher.options.frequencyThreshold, 2, 'Custom frequencyThreshold should be set');
     t.equal(hasher.options.numHashFunctions, 64, 'Custom numHashFunctions should be set');
@@ -33,10 +33,10 @@ test('JSONHash - Custom Options Initialization', (t) => {
 
 // --- Core Functionality Tests ---
 
-test('JSONHash - Sketch Generation and Comparison (Identical JSON)', (t) => {
+test('JSONHashify - Sketch Generation and Comparison (Identical JSON)', (t) => {
     t.plan(3);
     const numHashes = 64;
-    const hasher = new JSONHash({ numHashFunctions: numHashes });
+    const hasher = new JSONHashify({ numHashFunctions: numHashes });
     const json1 = { name: "Alice", age: 30, city: "New York" };
     const json2 = { name: "Alice", age: 30, city: "New York" };
 
@@ -48,10 +48,10 @@ test('JSONHash - Sketch Generation and Comparison (Identical JSON)', (t) => {
     t.equal(hasher.compareSketches(sketch1, sketch2), 1.0, 'Similarity for identical JSON should be 1.0');
 });
 
-test('JSONHash - Sketch Generation and Comparison (Slightly Different Value)', (t) => {
+test('JSONHashify - Sketch Generation and Comparison (Slightly Different Value)', (t) => {
     t.plan(3);
     const numHashes = 64;
-    const hasher = new JSONHash({ numHashFunctions: numHashes, shingleSize: 3 });
+    const hasher = new JSONHashify({ numHashFunctions: numHashes, shingleSize: 3 });
     const json1 = { name: "Alice Smith", address: { city: "New York" } };
     const json2 = { name: "Alice Smyth", address: { city: "New York" } };
 
@@ -65,10 +65,10 @@ test('JSONHash - Sketch Generation and Comparison (Slightly Different Value)', (
     t.ok(similarity > 0.5 && similarity < 1.0, `Similarity (${similarity.toFixed(3)}) should be high (>0.5) but < 1.0 for similar values`);
 });
 
-test('JSONHash - Sketch Generation and Comparison (Completely Different JSON)', (t) => {
+test('JSONHashify - Sketch Generation and Comparison (Completely Different JSON)', (t) => {
     t.plan(3);
     const numHashes = 64;
-    const hasher = new JSONHash({ numHashFunctions: numHashes });
+    const hasher = new JSONHashify({ numHashFunctions: numHashes });
     const json1 = { type: "user", id: 123, active: true, note: "This is user one" };
     const json2 = { product: "widget", price: 99.99, tags: ["a", "b"], description: "A different item" };
 
@@ -85,11 +85,11 @@ test('JSONHash - Sketch Generation and Comparison (Completely Different JSON)', 
 
 // --- Tests for AST/UNIST-like Structures ---
 
-test('JSONHash - Similarity on Similar Remark ASTs', (t) => {
+test('JSONHashify - Similarity on Similar Remark ASTs', (t) => {
     t.plan(3); 
     const numHashes = 64;
     const shingleSize = 4;
-    const hasher = new JSONHash({ numHashFunctions: numHashes, shingleSize: shingleSize, preserveArrayOrder: true });
+    const hasher = new JSONHashify({ numHashFunctions: numHashes, shingleSize: shingleSize, preserveArrayOrder: true });
 
     // Sample AST 1: Represents roughly `# Heading\n\nParagraph text.`
     const ast1 = {
@@ -134,11 +134,11 @@ test('JSONHash - Similarity on Similar Remark ASTs', (t) => {
     t.ok(similarity > 0.7, `Similarity (${similarity.toFixed(3)}) should be high (>0.7) for similar ASTs`);
 });
 
-test('JSONHash - Low Similarity on Dissimilar ASTs', (t) => {
+test('JSONHashify - Low Similarity on Dissimilar ASTs', (t) => {
     t.plan(3); 
     const numHashes = 64;
     const shingleSize = 4;
-    const hasher = new JSONHash({ numHashFunctions: numHashes, shingleSize: shingleSize });
+    const hasher = new JSONHashify({ numHashFunctions: numHashes, shingleSize: shingleSize });
 
     // AST 1: Heading + Paragraph
     const ast1 = {
@@ -180,12 +180,12 @@ test('JSONHash - Low Similarity on Dissimilar ASTs', (t) => {
     t.ok(similarity >= 0 && similarity < 0.4, `Similarity (${similarity.toFixed(3)}) should be low (<0.3) for dissimilar ASTs`);
 });
 
-test('JSONHash - Similarity on JS ASTs with Different Variable Names', (t) => {
+test('JSONHashify - Similarity on JS ASTs with Different Variable Names', (t) => {
     t.plan(5);
     const numHashes = 64;
     const shingleSize = 3; // Smaller shingle size might be better for code structure
     // Preserve array order, as it matters in ASTs (e.g., function parameters)
-    const hasher = new JSONHash({ numHashFunctions: numHashes, shingleSize: shingleSize, preserveArrayOrder: true });
+    const hasher = new JSONHashify({ numHashFunctions: numHashes, shingleSize: shingleSize, preserveArrayOrder: true });
 
     // Simplified AST for: function add(a, b) { return a + b; }
     const jsAst1 = {
@@ -288,4 +288,35 @@ test('JSONHash - Similarity on JS ASTs with Different Variable Names', (t) => {
     const similarity23 = hasher.compareSketches(sketch2, sketch3);
     t.ok(similarity12 > similarity23, '1 and 2 should be more similar than 2 and 3');
 
+});
+
+test('JSONHashify - Approximation Options in compareSketches', (t) => {
+    t.plan(4);
+    const hasher = new JSONHashify({ numHashFunctions: 64, numGroups: 4 });
+    const jsonA = { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6 };
+    const jsonB_similar = { a: 1, b: 2, c: 3, d: 4, e: 99, f: 6 }; // High similarity
+    const jsonC_dissimilar = { x: 10, y: 20, z: 30 }; // Low similarity
+
+    const sketchA = hasher.generateSketch(jsonA);
+    const sketchB = hasher.generateSketch(jsonB_similar);
+    const sketchC = hasher.generateSketch(jsonC_dissimilar);
+
+    // Test high similarity, expect early exit to 1.0 with appropriate threshold
+    const highSimApprox = hasher.compareSketches(sketchA, sketchB, { similarityThreshold: 0.5, errorTolerance: 0.01 });
+    // If actual similarity is high but not confidently >= 0.5, it might return 0.0 (dissimilar enough relative to threshold)
+    // Given the output was 0, this implies it was not confidently >= 0.5.
+    t.equal(highSimApprox, 0.0, 'Approximation with high sim (but not confidently >= 0.5) and threshold 0.5 should return 0.0');
+
+    // Test low similarity, expect early exit to 0.0
+    const lowSimApprox = hasher.compareSketches(sketchA, sketchC, { similarityThreshold: 0.5, errorTolerance: 0.01 });
+    t.equal(lowSimApprox, 0.0, 'Approximation with low sim and threshold 0.5 should return 0.0');
+
+    // Test low similarity, but threshold is very low - should early exit to 1.0 if actual > threshold
+    const lowSimLowThresh = hasher.compareSketches(sketchA, sketchC, { similarityThreshold: 0.01, errorTolerance: 0.01 });
+    // Actual similarity for A vs C is ~0.133. Threshold is 0.01. 0.133 is > 0.01, so it's "similar enough" for this low threshold.
+    t.equal(lowSimLowThresh, 1.0, `Low sim (actual ~0.133) with low threshold (0.01) should return 1.0`);
+
+    // Test exact calculation for reference
+    const exactLowSim = hasher.compareSketches(sketchA, sketchC);
+    t.ok(exactLowSim >= 0 && exactLowSim < 0.5, `Exact low sim (${exactLowSim.toFixed(3)}) should be < 0.5`);
 });
